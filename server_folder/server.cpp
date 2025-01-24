@@ -9,6 +9,58 @@
 #define PORT 12345
 #define BUFFER_SIZE 1024
 
+struct Player // структура данных о клиенте
+{
+    std::string name;
+    uint8_t C1, C2, C3;
+};
+
+std::map <std::string, Player> players; // база игроков
+
+// функция обработки регистрации
+void handleRegistration(const std::vector<uint8_t>& packet, int clientId) {
+    size_t index = 0;
+
+    // длина имени
+    uint8_t nameSize = packet[index];
+    index++;
+
+    // имя
+    std::string name(packet.begin() + index, packet.begin() + index + nameSize);
+    index += nameSize;
+
+    // хар-ки
+    uint8_t C1 = packet[index++];
+    uint8_t C2 = packet[index++];
+    uint8_t C3 = packet[index++];
+
+    // запись в базу
+    Player player = {name, C1, C2, C3};
+    players[name] = player;
+
+    std::cout << "игрок зареган: " << name
+        << " (C1=" << (int)C1
+        << ", C2=" << (int)C2
+        << ", C3=" << (int)C3 << ")\n";
+}
+
+// обработка входящего пакета
+void handlePacket(const std::vector<uint8_t>& packet, int clientId) {
+    if (packet.empty()) return;
+
+    uint8_t packetType = packet[0];
+
+    switch (packetType)
+    {
+    case 1:
+        handleRegistration(packet, clientId);
+        break;
+    
+    default:
+        std::cout << "неизвестный тип пакета: " << (int)packetType << "\n";
+    }
+}
+
 void initServer() {
     int sockfd;
     struct sockaddr_in serverAddr, clientAddr;
