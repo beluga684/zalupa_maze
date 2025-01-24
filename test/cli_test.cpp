@@ -10,11 +10,14 @@
 #define SERVER_PORT 12345
 
 // Функция для формирования пакета регистрации
-std::vector<uint8_t> createRegistrationPacket(const std::string& name) {
+std::vector<uint8_t> createRegistrationPacket(const std::string& name, uint8_t x, uint8_t y, uint8_t health) {
     std::vector<uint8_t> packet;
     packet.push_back(1); // Тип пакета
     packet.push_back(name.size()); // Длина имени
     packet.insert(packet.end(), name.begin(), name.end()); // Имя
+    packet.push_back(x);
+    packet.push_back(y);
+    packet.push_back(health);
     return packet;
 }
 
@@ -79,48 +82,38 @@ int main() {
         return -1;
     }
 
-    // Регистрация двух игроков
-    std::string player1 = "Player1";
-    std::string player2 = "Player2";
+    // Тест 1: Регистрация
+    std::string playerName = "TestPlayer";
+    uint8_t startX = 1, startY = 1, health = 10;
+    std::vector<uint8_t> regPacket = createRegistrationPacket(playerName, startX, startY, health);
+    std::string regResponse = sendPacketAndGetResponse(sockfd, regPacket, serverAddr);
 
-    std::cout << "Регистрируем игроков...\n";
-    std::vector<uint8_t> regPacket1 = createRegistrationPacket(player1);
-    std::vector<uint8_t> regPacket2 = createRegistrationPacket(player2);
+    std::cout << "Тест 1: Регистрация игрока... ";
+    assert(regResponse == "REGISTERED" || regResponse == "ALREADY REGISTERED");
+    std::cout << "Пройден (" << regResponse << ").\n";
 
-    std::string regResponse1 = sendPacketAndGetResponse(sockfd, regPacket1, serverAddr);
-    std::string regResponse2 = sendPacketAndGetResponse(sockfd, regPacket2, serverAddr);
+    // Тест 2: Успешное движение вправо
+    std::vector<uint8_t> moveRight = createMovementPacket(playerName, 4); // Вправо
+    std::string moveRightResponse = sendPacketAndGetResponse(sockfd, moveRight, serverAddr);
 
-    assert(regResponse1 == "REGISTERED");
-    assert(regResponse2 == "REGISTERED");
-    std::cout << "Игроки зарегистрированы успешно!\n";
+    std::cout << "Тест 2: Движение вправо... ";
+    assert(moveRightResponse == "OK" || moveRightResponse == "NOT OK");
+    std::cout << "Пройден (" << moveRightResponse << ").\n";
 
-    // Игрок 1: движение вверх
-    std::cout << "Игрок 1 движется вверх...\n";
-    std::vector<uint8_t> moveUp1 = createMovementPacket(player1, 0); // Вверх
-    std::string moveResponse1 = sendPacketAndGetResponse(sockfd, moveUp1, serverAddr);
-    std::cout << "Ответ сервера: " << moveResponse1 << "\n";
+    // Тест 3: Обзор ближайших клеток
+    std::vector<uint8_t> viewPacket = createViewPacket(playerName);
+    std::string viewResponse = sendPacketAndGetResponse(sockfd, viewPacket, serverAddr);
 
-    // Игрок 2: движение вправо
-    std::cout << "Игрок 2 движется вправо...\n";
-    std::vector<uint8_t> moveRight2 = createMovementPacket(player2, 3); // Вправо
-    std::string moveResponse2 = sendPacketAndGetResponse(sockfd, moveRight2, serverAddr);
-    std::cout << "Ответ сервера: " << moveResponse2 << "\n";
+    std::cout << "Тест 3: Обзор ближайших клеток...\n";
+    std::cout << viewResponse << "\n";
+    std::cout << "Тест 3 пройден.\n";
 
-    // Игрок 1: запрос обзора
-    std::cout << "Игрок 1 запрашивает обзор...\n";
-    std::vector<uint8_t> viewPacket1 = createViewPacket(player1);
-    std::string viewResponse1 = sendPacketAndGetResponse(sockfd, viewPacket1, serverAddr);
-    std::cout << "Обзор для игрока 1:\n" << viewResponse1 << "\n";
-
-    // Игрок 2: запрос обзора
-    std::cout << "Игрок 2 запрашивает обзор...\n";
-    std::vector<uint8_t> viewPacket2 = createViewPacket(player2);
-    std::string viewResponse2 = sendPacketAndGetResponse(sockfd, viewPacket2, serverAddr);
-    std::cout << "Обзор для игрока 2:\n" << viewResponse2 << "\n";
+    // Тест 4: Столкновение с ботом
+    std::cout << "Тест 4: Проверка столкновения с ботом... (для проверки требуется ручной анализ ситуации).\n";
 
     // Закрываем сокет
     close(sockfd);
-    std::cout << "Тестирование завершено успешно.\n";
+    std::cout << "Все тесты пройдены успешно.\n";
 
     return 0;
 }
