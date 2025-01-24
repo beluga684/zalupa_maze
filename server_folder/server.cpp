@@ -22,7 +22,7 @@ int maze[MAZE_HEIGHT][MAZE_WIDTH] = {
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
     {1, 1, 1, 1, 1, 1, 0, 1, 1, 1},
     {1, 0, 0, 0, 0, 0, 0, 1, 1, 1},
-    {1, 0, 0, 0, 0, 1, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 1, 0, 0, 0, 2},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 };
 
@@ -33,11 +33,12 @@ struct Player // структура данных о клиенте
     int x, y;
 };
 
-std::map <std::string, Player> players; // база игроков
+// база игроков
+std::map <std::string, Player> players;
 
 // проверка ячейки
 bool canMove(int x, int y) {
-    return x >= 0 and x < MAZE_WIDTH and y>= 0 and y < MAZE_HEIGHT and maze[x][y] == 0;
+    return x >= 0 and x < MAZE_WIDTH and y>= 0 and y < MAZE_HEIGHT and maze[x][y] != 1;
 }
 
 // функция обработки регистрации
@@ -58,7 +59,7 @@ void handleRegistration(const std::vector<uint8_t>& packet) {
     uint8_t C3 = packet[index++];
 
     // стартовая позиция
-    int startX = 1, startY = 1;
+    int startX = 7, startY = 8;
 
     if (players.find(name) != players.end()) {
         std::cout << "имя " << name << "занято \n";
@@ -79,7 +80,7 @@ void handleRegistration(const std::vector<uint8_t>& packet) {
 }
 
 // обработка движения
-void handleMovement(const std::vector<uint8_t>& packet) {
+std::string handleMovement(const std::vector<uint8_t>& packet) {
     size_t index = 1;
 
     // имя
@@ -95,7 +96,7 @@ void handleMovement(const std::vector<uint8_t>& packet) {
     auto it = players.find(name);
     if (it == players.end()) {
         std::cout << "игрок " << name << " не найден!\n";
-        return;
+        return "ERROR";
     }
 
     Player& player = it->second;
@@ -107,84 +108,86 @@ void handleMovement(const std::vector<uint8_t>& packet) {
         case 2: newY++; break; // вниз
         case 3: newX--; break; // влево
         case 4: newX++; break; // вправо
-        default: std::cout << "неверное направление: " << (int)direction << "\n"; return;
+        default: std::cout << "неверное направление: " << (int)direction << "\n"; return "ERROR";
     }
 
     // проверка возможности движения
     if (canMove(newX, newY)) {
         player.x = newX;
         player.y = newY;
+        
+        if (maze[newX][newY] == 2) {
+            std::cout << "игрок " << name << " вышел \n";
+            return "WIN";
+        }
+
         std::cout << "игрок " << name << " переместился на (" << newX << ", " << newY << ")\n";
+        return "OK";
     } else {
         std::cout << "игрок " << name << " не может двигаться в (" << newX << ", " << newY << ")\n";
+        return "NOT OK";
     }
 }
 
 // обработка входящего пакета
-void handlePacket(const std::vector<uint8_t>& packet) {
+void handlePacket(const std::vector<uint8_t>& packet, struct sockaddr_in& clientAddr, int sockfd) {
     if (packet.empty()) return;
 
     uint8_t packetType = packet[0];
+    std::string response;
 
-    switch (packetType)
-    {
-    case 1: // регистрация
-        handleRegistration(packet);
-        break;
-    case 2:
-        handleMovement(packet);
-        break;
-    default:
-        std::cout << "неизвестный тип пакета: " << (int)packetType << "\n";
+    switch (packetType) {
+        case 1: // регистрация
+            handleRegistration(packet);
+            response = "REGISTERED";
+            break;
+        case 2: // движение
+            response = handleMovement(packet);
+            break;
+        default: // неизвестный тип
+            std::cout << "неизвестный тип пакета: " << (int)packetType << "\n";
+            response = "UNKNOWN";
     }
+
+    // отправка ответа
+    sendto(sockfd, response.c_str(), response.size(), 0, (struct sockaddr*)&clientAddr, sizeof(clientAddr));
 }
 
 void initServer() {
     int sockfd;
     struct sockaddr_in serverAddr, clientAddr;
 
-    // создание UDP сокета
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("не удалось создать сокет");
+        perror("Не удалось создать сокет");
         exit(EXIT_FAILURE);
     }
-    std::cout << "сокет создан\n";
 
-    // настройка одреса сервера
     memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
     serverAddr.sin_port = htons(PORT);
 
-    // связка сокета к порту
     if (bind(sockfd, (const struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        perror("не удалось привязать сокет к адресу");
+        perror("Не удалось привязать сокет к адресу");
         close(sockfd);
         exit(EXIT_FAILURE);
     }
-    std::cout << "сервер запущен на порту " << PORT << "\n";
+    std::cout << "Сервер запущен на порту " << PORT << ".\n";
 
-    // цикл обработки запросов
     while (true) {
         char buffer[BUFFER_SIZE];
         socklen_t len = sizeof(clientAddr);
 
-        // получение данных от клиента
         int n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&clientAddr, &len);
         if (n < 0) {
-            perror("ошибка при получении данных");
+            perror("Ошибка при получении данных");
             continue;
         }
 
         std::vector<uint8_t> packet(buffer, buffer + n);
-        handlePacket(packet);
-
-        // отправка ответа
-        const char* response = "пакет обработан!";
-        sendto(sockfd, response, strlen(response), 0, (struct sockaddr*)&clientAddr, len);
+        handlePacket(packet, clientAddr, sockfd);
     }
 
-    // закрытие сокета
     close(sockfd);
 }
 
