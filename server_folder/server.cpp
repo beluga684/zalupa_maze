@@ -77,7 +77,7 @@ std::string handleView(const std::vector<uint8_t>& packet) {
 }
 
 // функция обработки регистрации
-void handleRegistration(const std::vector<uint8_t>& packet) {
+std::string handleRegistration(const std::vector<uint8_t>& packet) {
     size_t index = 1;
 
     // длина имени
@@ -98,7 +98,7 @@ void handleRegistration(const std::vector<uint8_t>& packet) {
 
     if (players.find(name) != players.end()) {
         std::cout << "имя " << name << "занято \n";
-        return;
+        return "ERROR: Player already exists";
     }
 
     // запись в базу
@@ -112,6 +112,7 @@ void handleRegistration(const std::vector<uint8_t>& packet) {
         << " (x=" << startX
         << ", y=" << startY
         << ")\n";
+    return "OK";
 }
 
 // обработка движения
@@ -131,7 +132,7 @@ std::string handleMovement(const std::vector<uint8_t>& packet) {
     auto it = players.find(name);
     if (it == players.end()) {
         std::cout << "игрок " << name << " не найден!\n";
-        return "ERROR";
+        return "ERROR: Player not found";
     }
 
     Player& player = it->second;
@@ -143,7 +144,7 @@ std::string handleMovement(const std::vector<uint8_t>& packet) {
         case 2: newY++; break; // вниз
         case 3: newX--; break; // влево
         case 4: newX++; break; // вправо
-        default: std::cout << "неверное направление: " << (int)direction << "\n"; return "ERROR";
+        default: std::cout << "неверное направление: " << (int)direction << "\n"; return "ERROR: Invalid direction";
     }
 
     // проверка возможности движения
@@ -184,7 +185,7 @@ void handlePacket(const std::vector<uint8_t>& packet, struct sockaddr_in& client
             break;
         default: // неизвестный тип
             std::cout << "неизвестный тип пакета: " << (int)packetType << "\n";
-            response = "UNKNOWN";
+            response = "UNKNOWN PACKET TYPE";
     }
 
     // отправка ответа
