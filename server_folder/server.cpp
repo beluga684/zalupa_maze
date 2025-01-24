@@ -10,6 +10,8 @@
 #include <cstring>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <algorithm>
+#include <random>
 
 // Параметры сервера
 #define SERVER_PORT 12345
@@ -31,18 +33,45 @@ std::map<std::string, std::pair<int, int>> players; // Игроки и их по
 std::vector<std::pair<int, int>> botPositions;     // Боты и их позиции
 std::mutex gameMutex;                              // Мьютекс для синхронизации
 
-int maze[10][10] = {
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 1, 0, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 1, 1, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 2, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
-};
+std::vector<std::vector<int>> maze;
+
+// Функция генерации случайного лабиринта
+void generateMaze(int width, int height) {
+    // Инициализируем лабиринт как полностью закрытый (все 1 - стены)
+    maze = std::vector<std::vector<int>>(height, std::vector<int>(width, 1));
+
+    // Используем рекурсивный DFS для создания путей
+    auto carvePassages = [&](int x, int y, auto&& carvePassagesRef) -> void {
+        const int dx[] = {0, 1, 0, -1}; // Направления: вверх, вправо, вниз, влево
+        const int dy[] = {-1, 0, 1, 0};
+
+        // Перемешиваем направления для случайного обхода
+        std::vector<int> directions = {0, 1, 2, 3};
+        
+        // Используем генератор случайных чисел
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(directions.begin(), directions.end(), g);
+
+        for (int i : directions) {
+            int nx = x + dx[i] * 2; // Координаты следующей клетки (через одну)
+            int ny = y + dy[i] * 2;
+
+            // Проверяем, что новая клетка в пределах лабиринта и ещё не посещена
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height && maze[ny][nx] == 1) {
+                // Убираем стену между текущей и новой клеткой
+                maze[y + dy[i]][x + dx[i]] = 0;
+                maze[ny][nx] = 0;
+
+                // Рекурсивно продолжаем "прокапывать" проходы
+                carvePassagesRef(nx, ny, carvePassagesRef);
+            }
+        }
+    };
+
+    // Стартуем с точки (1, 1)
+    carvePassages(1, 1, carvePassages);
+}
 
 // Функция регистрации игрока
 std::string handleRegistration(const std::vector<uint8_t>& data) {
@@ -203,7 +232,19 @@ void startServer() {
     }
 }
 
+// Функция для отображения лабиринта в консоль
+void printMaze() {
+    for (const auto& row : maze) {
+        for (int cell : row) {
+            std::cout << (cell ? "#" : ".") << " ";
+        }
+        std::cout << "\n";
+    }
+}
+
 int main() {
+    generateMaze(10, 10);
+    printMaze();
     registerBots(3); // Регистрация 3 ботов
     std::thread botThread(moveBots);         // Поток для движения ботов
     std::thread logThread(logBotPositions); // Поток для логирования позиций ботов
