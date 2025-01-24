@@ -41,6 +41,41 @@ bool canMove(int x, int y) {
     return x >= 0 and x < MAZE_WIDTH and y>= 0 and y < MAZE_HEIGHT and maze[x][y] != 1;
 }
 
+// функция обработки обзора
+std::string handleView(const std::vector<uint8_t>& packet) {
+    size_t index = 1;
+
+    uint8_t nameSize = packet[index];
+    index++;
+    std::string name(packet.begin() + index, packet.begin() + index + nameSize);
+    index += nameSize;
+
+    auto it = players.find(name);
+    if (it == players.end()) {
+        std::cout << "игрок " << name << " не найден!\n";
+        return "ERROR";
+    }
+
+    Player player = it->second;
+
+    // определение границ обзора
+    int startX = std::max(0, player.x-1);
+    int endX = std::min(MAZE_WIDTH - 1, player.x + 1);
+    int startY = std::max(0, player.y - 1);
+    int endY = std::min(MAZE_HEIGHT - 1, player.y + 1);
+
+    // формирование ответа
+    std::string response;
+    for (int y = startY; y <= endY; y++) {
+        for (int x = startX; x <= endX; x++)
+            response += std::to_string(maze[y][x]) + " ";
+        response.pop_back();
+        response += "\n";
+    }
+
+    return response;
+}
+
 // функция обработки регистрации
 void handleRegistration(const std::vector<uint8_t>& packet) {
     size_t index = 1;
@@ -143,6 +178,9 @@ void handlePacket(const std::vector<uint8_t>& packet, struct sockaddr_in& client
             break;
         case 2: // движение
             response = handleMovement(packet);
+            break;
+        case 3: // обзор
+            response = handleView(packet);
             break;
         default: // неизвестный тип
             std::cout << "неизвестный тип пакета: " << (int)packetType << "\n";

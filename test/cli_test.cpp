@@ -53,6 +53,16 @@ std::string sendPacketAndGetResponse(int sockfd, const std::vector<uint8_t>& pac
     return std::string(buffer);
 }
 
+// запрос на обзор
+std::vector<uint8_t> createViewPacket(const std::string& name) {
+    std::vector<uint8_t> packet;
+    packet.push_back(3);
+    packet.push_back(name.size());
+    packet.insert(packet.end(), name.begin(), name.end());
+    return packet;
+}
+
+
 int main() {
     int sockfd;
     struct sockaddr_in serverAddr;
@@ -99,11 +109,19 @@ int main() {
     assert(moveLeftResponse == "OK"); // Ожидаем ответ OK
     std::cout << "Пройден.\n";
 
-    // Тест 4: Победа (движение к выходу)
+    // Тест 4: Обзор ближайших клеток
+    std::cout << "Тест 4: Обзор ближайших клеток... ";
+    std::vector<uint8_t> viewPacket = createViewPacket(playerName);
+    std::string viewResponse = sendPacketAndGetResponse(sockfd, viewPacket, serverAddr);
+
+    std::cout << "Ответ сервера (обзор):\n" << viewResponse << "\n";
+    std::cout << "Тест 4 пройден.\n";
+
+    // Тест 5: Победа (движение к выходу)
     std::vector<uint8_t> moveRight = createMovementPacket(playerName, 2); // Вниз
     std::string moveRightResponse = sendPacketAndGetResponse(sockfd, moveRight, serverAddr);
 
-    std::cout << "Тест 4: Достижение выхода... ";
+    std::cout << "Тест 5: Достижение выхода... ";
     assert(moveRightResponse == "WIN"); // Ожидаем ответ WIN
     std::cout << "Пройден.\n";
 
