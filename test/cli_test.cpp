@@ -1,10 +1,10 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <cstring>    // memset
-#include <arpa/inet.h> // для работы с сокетами (Linux/Unix)
-#include <unistd.h>    // для close()
-#include <cassert>     // для assert()
+#include <cstring>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cassert>
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 12345

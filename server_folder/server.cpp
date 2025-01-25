@@ -35,42 +35,60 @@ std::mutex gameMutex;                              // Мьютекс для си
 
 std::vector<std::vector<int>> maze;
 
-// Функция генерации случайного лабиринта
-void generateMaze(int width, int height) {
-    // Инициализируем лабиринт как полностью закрытый (все 1 - стены)
+// Функция генерации лабиринта
+void generateMaze(int width, int height, int exitCount) {
     maze = std::vector<std::vector<int>>(height, std::vector<int>(width, 1));
 
-    // Используем рекурсивный DFS для создания путей
     auto carvePassages = [&](int x, int y, auto&& carvePassagesRef) -> void {
-        const int dx[] = {0, 1, 0, -1}; // Направления: вверх, вправо, вниз, влево
+        const int dx[] = {0, 1, 0, -1};
         const int dy[] = {-1, 0, 1, 0};
 
-        // Перемешиваем направления для случайного обхода
         std::vector<int> directions = {0, 1, 2, 3};
-        
-        // Используем генератор случайных чисел
+
         std::random_device rd;
         std::mt19937 g(rd());
         std::shuffle(directions.begin(), directions.end(), g);
 
         for (int i : directions) {
-            int nx = x + dx[i] * 2; // Координаты следующей клетки (через одну)
+            int nx = x + dx[i] * 2;
             int ny = y + dy[i] * 2;
 
-            // Проверяем, что новая клетка в пределах лабиринта и ещё не посещена
             if (nx >= 0 && nx < width && ny >= 0 && ny < height && maze[ny][nx] == 1) {
-                // Убираем стену между текущей и новой клеткой
                 maze[y + dy[i]][x + dx[i]] = 0;
                 maze[ny][nx] = 0;
 
-                // Рекурсивно продолжаем "прокапывать" проходы
                 carvePassagesRef(nx, ny, carvePassagesRef);
             }
         }
     };
 
-    // Стартуем с точки (1, 1)
     carvePassages(1, 1, carvePassages);
+
+    for (int x = 0; x < width; ++x) {
+        maze[0][x] = 1;            // Верхняя граница
+        maze[height - 1][x] = 1;   // Нижняя граница
+    }
+    for (int y = 0; y < height; ++y) {
+        maze[y][0] = 1;            // Левая граница
+        maze[y][width - 1] = 1;    // Правая граница
+    }
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::uniform_int_distribution<int> distX(1, width - 2);
+    std::uniform_int_distribution<int> distY(1, height - 2);
+
+    for (int i = 0; i < exitCount; ++i) {
+        while (true) {
+            int x = distX(g);
+            int y = distY(g);
+
+            if (maze[y][x] == 0) {
+                maze[y][x] = 2;
+                break;
+            }
+        }
+    }
 }
 
 // Функция регистрации игрока
@@ -80,7 +98,9 @@ std::string handleRegistration(const std::vector<uint8_t>& data) {
 
     int x = data[2 + nameLength];
     int y = data[3 + nameLength];
-    int health = data[4 + nameLength];
+    int С1 = data[4 + nameLength];
+    int С2 = data[5 + nameLength];
+    int С3 = data[6 + nameLength];
 
     std::lock_guard<std::mutex> lock(gameMutex);
     if (players.find(name) == players.end()) {
@@ -172,14 +192,26 @@ void moveBots() {
             int x = bot.first;
             int y = bot.second;
 
+            // Если бот уже достиг выхода, пропускаем его
+            if (maze[y][x] == 2) {
+                continue;
+            }
+
             for (int i = 0; i < 4; ++i) {
                 int dir = std::rand() % 4;
                 int nx = x + dx[dir];
                 int ny = y + dy[dir];
 
-                if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10 && maze[ny][nx] == 0) {
-                    bot = {nx, ny};
-                    break;
+                // Проверяем, можно ли переместиться в новую ячейку
+                if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
+                    if (maze[ny][nx] == 0) {
+                        bot = {nx, ny};
+                        break;
+                    } else if (maze[ny][nx] == 2) {
+                        // Если бот достиг ячейки с выходом, обновляем его положение и останавливаем
+                        bot = {nx, ny};
+                        break;
+                    }
                 }
             }
         }
@@ -236,14 +268,20 @@ void startServer() {
 void printMaze() {
     for (const auto& row : maze) {
         for (int cell : row) {
-            std::cout << (cell ? "#" : ".") << " ";
+            if (cell == 1) {
+                std::cout << "# "; // Стена
+            } else if (cell == 2) {
+                std::cout << "E "; // Выход
+            } else {
+                std::cout << ". "; // Проход
+            }
         }
         std::cout << "\n";
     }
 }
 
 int main() {
-    generateMaze(10, 10);
+    generateMaze(10, 10, 10);
     printMaze();
     registerBots(3); // Регистрация 3 ботов
     std::thread botThread(moveBots);         // Поток для движения ботов
